@@ -45,7 +45,7 @@ def schedule_appointment():
     buyer_name = data.get("buyer_name")
     seller_email = data.get("seller_email")
     seller_name = data.get("seller_name")
-    property_type = data.get("property_type")
+    pro_type = data.get("pro_type")
     property_price = data.get("property_price")
 
     if not (buyer_id and seller_email and property_type):
