@@ -11,13 +11,13 @@ app = Flask(__name__)
 CORS(app)  # Allow frontend requests
 
 # ✅ Firebase Setup
-cred = credentials.Certificate("config.json")  # Your Firebase Admin SDK JSON
+cred = credentials.Certificate("config.json")  # Ensure this file exists and is correct
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# ✅ Email Configuration (Change to your credentials)
-EMAIL_ADDRESS = "your-email@gmail.com"
-EMAIL_PASSWORD = "your-app-password"
+# ✅ Email Configuration (Use environment variables for security)
+EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "your-email@gmail.com")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "your-app-password")
 
 # ✅ Send Email Function
 def send_email(to_email, subject, body):
@@ -41,38 +41,62 @@ def send_email(to_email, subject, body):
 @app.route("/schedule_appointment", methods=["POST"])
 def schedule_appointment():
     data = request.json
+
+    # Get buyer and seller IDs
     buyer_id = data.get("buyer_id")
-    buyer_name = data.get("buyer_name")
-    seller_email = data.get("seller_email")
-    seller_name = data.get("seller_name")
+    seller_id = data.get("seller_id")
     pro_type = data.get("pro_type")
     property_price = data.get("property_price")
 
-    if not (buyer_id and seller_email and property_type):
+    # Validate required fields
+    if not all([buyer_id, seller_id, pro_type, property_price]):
         return jsonify({"error": "Missing required fields"}), 400
 
-    # Save to Firestore
-    appointment_ref = db.collection("appointments").document()
-    appointment_data = {
-        "appointment_id": appointment_ref.id,
-        "buyer_id": buyer_id,
-        "buyer_name": buyer_name,
-        "seller_email": seller_email,
-        "seller_name": seller_name,
-        "pro_type": property_type,
-        "property_price": property_price,
-        "status": "Pending"
-    }
-    appointment_ref.set(appointment_data)
+    try:
+        # 🔍 Fetch Buyer Details from Firestore
+        buyer_doc = db.collection("buyers").document(buyer_id).get()
+        if not buyer_doc.exists:
+            return jsonify({"error": "Buyer not found"}), 404
+        buyer_data = buyer_doc.to_dict()
+        buyer_name = buyer_data.get("buy_name")
+        buyer_email = buyer_data.get("buy_email")
 
-    # Send Email to Seller
-    subject = f"New Appointment Request for {property_type}"
-    body = f"Hello {seller_name},\n\nYou have a new appointment request from {buyer_name} for your {property_type} listed at {property_price}.\nPlease respond as soon as possible.\n\nBest Regards,\nEstateBridge"
-    
-    if send_email(seller_email, subject, body):
-        return jsonify({"message": "Appointment scheduled and email sent successfully!"}), 200
-    else:
-        return jsonify({"error": "Appointment saved, but email failed"}), 500
+        # 🔍 Fetch Seller Details from Firestore
+        seller_doc = db.collection("sellers").document(seller_id).get()
+        if not seller_doc.exists:
+            return jsonify({"error": "Seller not found"}), 404
+        seller_data = seller_doc.to_dict()
+        seller_name = seller_data.get("sell_name")
+        seller_email = seller_data.get("sell_email")
+
+        # ✅ Save to Firestore
+        appointment_ref = db.collection("appointments").document()
+        appointment_data = {
+            "appointment_id": appointment_ref.id,
+            "buyer_id": buyer_id,
+            "buyer_name": buyer_name,
+            "buyer_email": buyer_email,
+            "seller_id": seller_id,
+            "seller_name": seller_name,
+            "seller_email": seller_email,
+            "pro_type": pro_type,
+            "property_price": property_price,
+            "status": "Pending"
+        }
+        appointment_ref.set(appointment_data)
+
+        # ✅ Send Email to Seller
+        subject = f"New Appointment Request for {pro_type}"
+        body = f"Hello {seller_name},\n\nYou have a new appointment request from {buyer_name} for your {pro_type} listed at {property_price}.\nPlease respond as soon as possible.\n\nBest Regards,\nEstateBridge"
+        
+        if send_email(seller_email, subject, body):
+            return jsonify({"message": "Appointment scheduled and email sent successfully!"}), 200
+        else:
+            return jsonify({"error": "Appointment saved, but email failed"}), 500
+
+    except Exception as e:
+        print("❌ Error:", e)
+        return jsonify({"error": "An error occurred", "details": str(e)}), 500
 
 # ✅ Run Flask App
 if __name__ == "__main__":
