@@ -59,7 +59,7 @@ def schedule_appointment():
         "buyer_name": buyer_name,
         "seller_email": seller_email,
         "seller_name": seller_name,
-        "property_type": property_type,
+        "pro_type": property_type,
         "property_price": property_price,
         "status": "Pending"
     }
